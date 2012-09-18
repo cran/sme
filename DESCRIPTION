@@ -1,6 +1,6 @@
 Package: sme
-Version: 0.3
-Date: 2012-06-20
+Version: 0.4
+Date: 2012-09-18
 Title: Smoothing-splines Mixed-effects Models
 Authors@R: c(person("Maurice", "Berk",
         email="maurice.berk01@imperial.ac.uk",role=c("aut","cre")))
@@ -9,8 +9,8 @@ Description: A package for fitting smoothing-splines mixed-effects
         models to replicated functional data sets.
 License: GPL (>= 3)
 URL: http://www2.imperial.ac.uk/~mab201
-Packaged: 2012-06-20 18:02:48 UTC; mab201
+Packaged: 2012-09-18 11:47:57 UTC; mab201
 Author: Maurice Berk [aut, cre]
 Maintainer: Maurice Berk <maurice.berk01@imperial.ac.uk>
 Repository: CRAN
-Date/Publication: 2012-06-21 05:36:03
+Date/Publication: 2012-09-18 18:39:03

@@ -14,7 +14,7 @@
 // Copyright - Maurice Berk (maurice.berk01@imperial.ac.uk) (http://www2.imperial.ac.uk/~mab201)
 
 #include <R.h>
-#include <R_ext/Applic.h>
+#include "NelderMead.h"
 
 #include <omp.h>
 
@@ -127,7 +127,7 @@ double SMEWrapper(
   
   if(*smeParameters->verbose)
   {
-    Rprintf("%f,%f (%f,%f) (%f,%f) gave a corrected AIC of %f in %d iterations\n", par[0], par[1], lambdaMu, lambdaV, *smeParameters->dfMu, *smeParameters->dfV, score, *smeParameters->iterations);
+    Rprintf("%f,%f (%f,%f) (%f,%f) gave a score of %f in %d iterations\n", par[0], par[1], lambdaMu, lambdaV, *smeParameters->dfMu, *smeParameters->dfV, score, *smeParameters->iterations);
   }
   
   return score;
@@ -165,8 +165,15 @@ void SMEOptimizationMultiple(
 {
   int i;
 
-  omp_set_dynamic(0);
-  omp_set_num_threads(*numberOfThreads);
+  if(*numberOfThreads == -1)
+  {
+    omp_set_dynamic(1);
+  }
+  else
+  {
+    omp_set_dynamic(0);
+    omp_set_num_threads(*numberOfThreads);
+  }
 
   SMEParameters* allParameters = calloc(*M, sizeof(SMEParameters));
   
@@ -282,8 +289,15 @@ void SMEMultiple(
 {
   int i;
 
-  omp_set_dynamic(0);
-  omp_set_num_threads(*numberOfThreads);
+  if(*numberOfThreads == -1)
+  {
+    omp_set_dynamic(1);
+  }
+  else
+  {
+    omp_set_dynamic(0);
+    omp_set_num_threads(*numberOfThreads);
+  }
 
   SMEParameters* allParameters = calloc(*M, sizeof(SMEParameters));
   
@@ -438,7 +452,7 @@ void SMEOptimization(
 
   for(numberOfRetries = 0, *smeParameters.info = 1; *smeParameters.info && numberOfRetries < maxRetries; lambdas[0] *= 10.0, lambdas[1] *= 10.0, numberOfRetries++)
   {
-    nmmin(numberOfParameters,
+    NelderMead(numberOfParameters,
           lambdas,
           lambdas,
           &minimum,
@@ -450,14 +464,14 @@ void SMEOptimization(
           alpha,
           beta,
           gamma,
-          /*0,*/*verbose ? 10 : 0,
+          0,/**verbose ? 10 : 0,*/
           &numberOfFunctionCalls,
           maxNMIterations);
 
     *lambdaMu = abs(lambdas[0]);//exp(lambdas[0]);
     *lambdaV = abs(lambdas[1]);//exp(lambdas[1]);
     
-    if(*verbose) Rprintf("NM chose %f,%f (%f,%f) which gave minimum %f\n", lambdas[0], lambdas[1], *lambdaMu, *lambdaV, minimum);
+    if(*verbose) Rprintf("NM chose %f,%f (%f,%f) which gave minimum %f with %03d runs of the EM aglorithm\n", lambdas[0], lambdas[1], *lambdaMu, *lambdaV, minimum, numberOfFunctionCalls);
 
     //Refit with optimal lambdas
     SME(y, 
@@ -581,13 +595,10 @@ void SME(double* y,
   Vector** timei;
   Matrix** Xi;
 
-  //#pragma omp critical
   yi = splitVector(&yAsVector, individual, &numberOfVectors);
 
-  //#pragma omp critical
   timei = splitVector(&timePointsAsVector, individual, &numberOfVectors);
 
-  //#pragma omp critical
   Xi = splitMatrix(&XAsMatrix, individual, &numberOfMatrices);
   //Matrix* Z = constructBlockDiagonalMatrix(Zi, numberOfMatrices);
   Matrix** inverseVi = calloc(*n, sizeof(Matrix*));
@@ -625,8 +636,6 @@ void SME(double* y,
   muPenaltyFactorization.rows = *p;
   muPenaltyFactorization.columns = *p;
 
-  //choleskyFactorization(&muPenalty, &muPenaltyFactorization);
-  #pragma omp critical
   matrixSquareRoot(&muPenalty, &muPenaltyFactorization);
 
   //Initialisation
@@ -646,8 +655,9 @@ void SME(double* y,
   invertMatrix(&Dv, &Dv);
 
   calculateYiPrecision(Xi, &Dv, sigmaSquared, *n, inverseVi);
-  //#pragma omp critical
+
   penalisedLeastSquaresUsingFactorization(&XAsMatrix, &yAsVector, &muAsVector, &muPenaltyFactorization);
+
   if(*zeroIntercept)
   {
     muAsVector.pointer[0] = 0.0;
@@ -656,7 +666,7 @@ void SME(double* y,
   
   for(*iterations = 0; *iterations < *maxIterations && (*likelihood - oldLikelihood) > *deltaEM; (*iterations)++)
   {
-    EStep(yi, Xi, inverseVi, *n, &Dv, &muAsVector, vi, epsiloni, *zeroIntercept);
+    EStep(yi, Xi, inverseVi, *N, *n, &Dv, &muAsVector, vi, epsiloni, *zeroIntercept);
     MStep(yi,
           &XAsMatrix,
           Xi,
@@ -676,18 +686,16 @@ void SME(double* y,
 
     oldLikelihood = *likelihood;
     calculateLikelihood(yi, Xi, inverseVi, &muAsVector, *n, likelihood);
-
-    //if(*verbose) Rprintf("Iteration %03d: delta likelihood = %f\n", *iterations + 1, *likelihood - oldLikelihood);
   }
 
   calculateDegreesOfFreedom(&XAsMatrix, Xi, inverseVi, &GAsMatrix, &Dv, *lambdaMu, *n, dfMu, dfV);
-  EStep(yi, Xi, inverseVi, *n, &Dv, &muAsVector, vi, epsiloni, *zeroIntercept);
+  EStep(yi, Xi, inverseVi, *N, *n, &Dv, &muAsVector, vi, epsiloni, *zeroIntercept);
 
   if((*likelihood - oldLikelihood) < 0)
   {
     *info = INFO_LIKELIHOOD_DECREASED;
   }
-  if(*verbose) Rprintf("Iteration %03d: delta likelihood = %f\n", *iterations + 1, *likelihood - oldLikelihood);
+  if(*verbose) Rprintf("EM converged in %03d iterations\n", *iterations + 1);
 
   for(i = 0; i < *n; i++)
   {
@@ -714,19 +722,27 @@ void SME(double* y,
   free(yi);
 }
 
-void EStep(Vector** yi, Matrix** Xi, Matrix** inverseVi, int n, Matrix* Dv, Vector* mu, Vector** vi, Vector** epsiloni, int zeroIntercept)
+void EStep(Vector** yi, Matrix** Xi, Matrix** inverseVi, int N, int n, Matrix* Dv, Vector* mu, Vector** vi, Vector** epsiloni, int zeroIntercept)
 {
   Vector yiCentered;
   Vector inverseViYiCentered;
   int i;
-  
+
+  double* yiCenteredBuffer = calloc(N, sizeof(double));
+  double* currentYiCenteredPointer = yiCenteredBuffer;
+
+  double* inverseViYiCenteredBuffer = calloc(N, sizeof(double));
+  double* currentInverseViYiCenteredPointer = inverseViYiCenteredBuffer;
+
   for(i = 0; i < n; i++)
   {
-    yiCentered.pointer = calloc(yi[i]->length, sizeof(double));
+    //yiCentered.pointer = calloc(yi[i]->length, sizeof(double));
     yiCentered.length = yi[i]->length;
+    yiCentered.pointer = currentYiCenteredPointer;
     
-    inverseViYiCentered.pointer = calloc(yi[i]->length, sizeof(double));
+    //inverseViYiCentered.pointer = calloc(yi[i]->length, sizeof(double));
     inverseViYiCentered.length = yi[i]->length;
+    inverseViYiCentered.pointer = currentInverseViYiCenteredPointer;
 
     //yiCentered <- (yi - Xi %*% eta)
     matrixVectorMultiply(Xi[i], mu, yi[i], &yiCentered, -1.0, 1.0, 0);
@@ -743,9 +759,14 @@ void EStep(Vector** yi, Matrix** Xi, Matrix** inverseVi, int n, Matrix* Dv, Vect
       vi[i]->pointer[0] = 0.0;
     }
 
-    free(inverseViYiCentered.pointer);
-    free(yiCentered.pointer);
+    //free(inverseViYiCentered.pointer);
+    //free(yiCentered.pointer);
+    currentYiCenteredPointer += yi[i]->length;
+    currentInverseViYiCenteredPointer += yi[i]->length;
   }
+
+  free(inverseViYiCenteredBuffer);
+  free(yiCenteredBuffer);
 }
 
 void MStep(Vector** yi,
@@ -803,9 +824,10 @@ void MStep(Vector** yi,
 
     choleskyFactorization(inverseVi[i], &U);
     // A <- Dv %*% t(X)
-    multiplyMatrices(Dv, Xi[i], &A, 0, 1);
+    //multiplyMatrices(Dv, Xi[i], &A, 0, 1);
     // A <- Dv %*% t(X) %*% t(chol(solve(Vi[[1]])))
-    multiplyMatrices(&A, &U, &A, 0, 1);
+    //multiplyMatrices(&A, &U, &A, 0, 1);
+    multiplyMatrices(Xi[i], &U, &A, 1, 1);
 
     symmetricRankKUpdate(&A, &conditionalCovariance, 1.0, 1.0);
     symmetricRank1Update(D, vi[i], 1.0);
@@ -820,6 +842,17 @@ void MStep(Vector** yi,
     free(A.pointer);
     free(U.pointer);
   }
+  U.pointer = calloc(Dv->columns * Dv->rows, sizeof(double));
+  U.rows = Dv->columns;
+  U.columns = Dv->rows;
+  choleskyFactorization(&conditionalCovariance, &U);
+  A.pointer = calloc(Dv->columns * U.columns, sizeof(double));
+  A.rows = Dv->rows;
+  A.columns = Dv->columns;
+  multiplyMatrices(Dv, &U, &A, 0, 1);
+  symmetricRankKUpdate(&A, &conditionalCovariance, 1.0, 0.0);
+  free(U.pointer);
+  free(A.pointer);
 
   for(i = 0; i < conditionalCovariance.rows * conditionalCovariance.columns; i++)
   {
@@ -841,8 +874,9 @@ void MStep(Vector** yi,
 
   *sigmaSquared = (1.0) / N * (sumOfSquares + *sigmaSquared * N - *sigmaSquared * *sigmaSquared * trace);
 
-  //#pragma omp critical
   penalisedLeastSquaresUsingFactorization(X, &yCentered, mu, muPenaltyFactorization);
+
+
   if(zeroIntercept)
   {
     mu->pointer[0] = 0.0;
@@ -937,139 +971,6 @@ void calculateLikelihood(Vector** yi, Matrix** Xi, Matrix** inverseVi, Vector* m
 
 void calculateDegreesOfFreedom(Matrix* X, Matrix** Xi, Matrix** inverseVi, Matrix* G, Matrix* Dv, double lambdaMu, int n, double* dfMu, double* dfV)
 {
-  // Do this by brute force
-  /*int i, j;
-  
-  Matrix* inverseV = constructBlockDiagonalMatrix(inverseVi, n);
-  Matrix* Z = constructBlockDiagonalMatrix(Xi, n);
-  Matrix** Dvs = calloc(n, Matrix*);
-
-  for(i = 0; i < n; i++)
-  {
-    Dvs[i] = Dv;
-  }
-
-  Matrix* DvTilde = constructBlockDiagonalMatrix(Dvs, n);
-
-  Matrix Hessian, U, tXitU, SMu, SV, ZDvTilde, ZDvTildetZ, ZDvTildetZinverseV, XHessian, XHessiantX;
-  
-  Hessian.rows = G->rows;
-  Hessian.columns = G->columns;
-  Hessian.pointer = calloc(Hessian.rows * Hessian.columns, double);
-  
-  tXitU.rows = G->rows;
-
-  for(i = 0; i < n; i++)
-  {
-    U.rows = inverseVi[i]->rows;
-    U.columns = inverseVi[i]->columns;
-    U.pointer = calloc(U.rows * U.columns, double);
-    
-    tXitU.columns = U.rows;
-    tXitU.pointer = calloc(tXitU.rows * tXitU.columns, double);
-
-    choleskyFactorization(inverseVi[i], &U);
-
-    multiplyMatrices(Xi[i], &U, &tXitU, 1, 1);
-    symmetricRankKUpdate(&tXitU, &Hessian, 1.0, 1.0);
-
-    free(tXitU.pointer);
-    free(U.pointer);
-  }
-  
-  for(i = 0; i < Hessian.rows; i++)
-  {
-    for(j = 0; j < Hessian.columns; j++)
-    {
-      Hessian.pointer[i + j * Hessian.rows] += lambdaMu * G->pointer[i + j * G->rows];
-    }
-  }
-
-  invertMatrix(&Hessian, &Hessian);
-
-  XHessian.rows = X->rows;
-  XHessian.columns = Hessian.columns;
-  XHessian.pointer = calloc(XHessian.rows * XHessian.columns, double);
-
-  multiplyMatrices(X, &Hessian, &XHessian, 0, 0);
-
-  XHessiantX.rows = X->rows;
-  XHessiantX.columns = X->rows;
-  XHessiantX.pointer = calloc(XHessiantX.rows * XHessiantX.columns, double);
-
-  multiplyMatrices(&XHessian, X, &XHessiantX, 0, 1);
-
-  SMu.rows = X->rows;
-  SMu.columns = X->rows;
-  SMu.pointer = calloc(SMu.rows * SMu.columns, double);
-  
-  multiplyMatrices(&XHessiantX, inverseV, &SMu, 0, 0);
-
-  for(i = 0, *dfMu = 0.0; i < SMu.rows; i++)
-  {
-    *dfMu += SMu.pointer[i + i * SMu.rows];
-  }
-
-  // Turn SMu into I - SMu
-  for(i = 0; i < SMu.rows; i++)
-  {
-    for(j = 0; j < SMu.rows; j++)
-    {
-      if(i == j)
-      {
-        SMu.pointer[i + j * SMu.rows] = 1.0 - SMu.pointer[i + j * SMu.rows];
-      }
-      else
-      {
-        SMu.pointer[i + j * SMu.rows] = -SMu.pointer[i + j * SMu.rows];
-      }
-    }
-  }
-
-  ZDvTilde.rows = Z->rows;
-  ZDvTilde.columns = DvTilde->columns;
-  ZDvTilde.pointer = calloc(ZDvTilde.rows * ZDvTilde.columns, double);
-  
-  multiplyMatrices(Z, DvTilde, &ZDvTilde, 0, 0);
-
-  ZDvTildetZ.rows = Z->rows;
-  ZDvTildetZ.columns = Z->rows;
-  ZDvTildetZ.pointer = calloc(ZDvTildetZ.rows * ZDvTildetZ.columns, double);
-
-  multiplyMatrices(&ZDvTilde, Z, &ZDvTildetZ, 0, 1);
-
-  ZDvTildetZinverseV.rows = Z->rows;
-  ZDvTildetZinverseV.columns = inverseV->columns;
-  ZDvTildetZinverseV.pointer = calloc(ZDvTildetZinverseV.rows * ZDvTildetZinverseV.columns, double);
-
-  multiplyMatrices(&ZDvTildetZ, inverseV, &ZDvTildetZinverseV, 0, 0);
-
-  SV.rows = Z->rows;
-  SV.columns = SMu.columns;
-  SV.pointer = calloc(SV.rows * SV.columns, double);
-
-  multiplyMatrices(&ZDvTildetZinverseV, &SMu, &SV, 0, 0);
-  
-  for(i = 0, *dfV = 0.0; i < SV.rows; i++)
-  {
-    *dfV += SV.pointer[i + i * SV.rows];
-  }
-
-  free(XHessiantX.pointer);
-  free(XHessian.pointer);
-  free(SV.pointer);
-  free(ZDvTildetZinverseV.pointer);
-  free(ZDvTildetZ.pointer);
-  free(ZDvTilde.pointer);
-  free(SMu.pointer);
-  free(U.pointer);
-  free(Hessian.pointer);
-  free(Dvs);
-
-  freeMatrix(DvTilde);
-  freeMatrix(inverseV);
-  freeMatrix(Z);*/
-  
   int i, j;
   
   Matrix** tXiinverseViXis = calloc(n, sizeof(Matrix*));
@@ -1177,6 +1078,8 @@ void calculateDegreesOfFreedom(Matrix* X, Matrix** Xi, Matrix** inverseVi, Matri
     freeMatrix(tXiinverseViXiDvs[i]);
   }
 
+  free(tXiinverseViXis);
+  free(tXiinverseViXiDvs);
   free(U.pointer);
   free(A.pointer);
   free(inverseHessian.pointer);

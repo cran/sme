@@ -184,7 +184,7 @@ sme.list <- function(
   deltaEM=1e-3,
   deltaNM=1e-3,
   criteria="AICc",
-  numberOfThreads=2,
+  numberOfThreads=-1,
   ...)
 {
   ys <- object
@@ -370,7 +370,7 @@ sme.list <- function(
       return.value <- list(
         coefficients=coefficients,
         fitted=fitted,
-        resid=resid,
+        resid=residuals,
         data=data,
         #em=em,
         logLik=likelihood,
@@ -378,7 +378,7 @@ sme.list <- function(
         call=call,
         nobs=length(y),
         smoothingParameters=c(mu=lambdaMu,v=lambdaV),
-        parameters=list(sigmaSquared=sigma,D=D),
+        parameters=list(sigmaSquared=sigma,D=matrix(D,nrow=p)),
         iterations=iterations,
         info=info)
       if(!is.null(knots)) return.value$knots <- knots
@@ -390,7 +390,7 @@ sme.list <- function(
   return(return.value)
 }
 
-vcov.sme <- function(object,...)
+getRoughnessMatrix <- function(object)
 {
   require(splines)
 
@@ -411,6 +411,26 @@ vcov.sme <- function(object,...)
     G <- roughnessMatrix(incidenceMatrix(c(min.tme,object$knots,max.tme)))
     G <- t(B) %*% G %*% B
   }
+
+  G
+}
+
+vcov.sme <- function(object,...)
+{
+  require(splines)
+
+  if(is.null(object$knots))
+  {
+    X <- incidenceMatrix(object$data$tme)
+    Xi <- split.data.frame(X,object$data$ind)
+  }
+  else
+  {
+    X <- ns(object$data$tme,knots=object$knots,intercept=T)
+    Xi <- split.data.frame(X,object$data$ind)
+  }
+
+  G <- getRoughnessMatrix(object)
   Dv <- solve(solve(object$parameters$D) + object$smoothingParameters["v"] * G)
   Vi <- lapply(Xi,function(Xi) Xi %*% Dv %*% t(Xi) + diag(object$parameters$sigmaSquared,nrow=nrow(Xi)))
   inverseVi <- lapply(Vi,solve)
@@ -432,7 +452,7 @@ rstandard.sme <- function(model,...)
 logLik.sme <- function(object,...)
 {
   logLikelihood <- object$logLik
-  attr(logLikelihood,"df") <- object$dfMu + object$dfV
+  attr(logLikelihood,"df") <- unname(object$df[1] + object$df[2])
   attr(logLikelihood,"nobs") <- length(resid(object))
   logLikelihood
 }
