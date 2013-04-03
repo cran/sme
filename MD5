@@ -1,11 +1,11 @@
-245ea2323f2e05f143a646bbb9333f1e *ChangeLog
-a5b355e218646927349a583afb5bb4df *DESCRIPTION
+3d8aa502340c2ee8806fa793c7e0705c *ChangeLog
+f08e586a0fda065fa728aa1cebef15c1 *DESCRIPTION
 d076d0820051fe3a43392d8cbfb60a32 *NAMESPACE
 a497c63f22199590e9598970115807fe *R/sme.R
 0012d882cdbfa5bdc40582419b526fa5 *data/MTB.rda
 08e3901cd7af58be596259aeb0cf25e9 *data/inflammatory.rda
 df5ff71528c6c615faa28e385eb196ca *inst/doc/Tutorial.Rnw
-a39826dbf5a02c96e57e36c6f98e443e *inst/doc/Tutorial.pdf
+8fb64b1018341ff1155cd685de736855 *inst/doc/Tutorial.pdf
 d76285d07ce0c72c4e0c3775af4363e1 *man/AICc.Rd
 901ebd03215120b91ed3c143bb1ff38c *man/BICn.Rd
 e43448f7a4f06b82ee2014464ed0b71b *man/MTB.Rd
@@ -33,7 +33,7 @@ edbdfc9bb04048e190f37caca1156424 *src/Matrix.c
 57e90dbd45c3707fe872dd1819f98e9a *src/NelderMead.h
 fc194622826241118e3b3ca68606688f *src/RoughnessMatrix.c
 b5882789664a0a873a088183512f2c2c *src/RoughnessMatrix.h
-75f11d568b10484ef9176fdd2dc3bad0 *src/SME.c
+3e9a07990cb4b8189d4cc9277a5180d5 *src/SME.c
 3fd1f26f5ce7f3a6ba707e299d4f9902 *src/SME.h
 c6fd98485965913482fb1455f96f8af7 *src/Utility.c
 e68337f58a3a9d03de15abfa7a823d50 *src/Utility.h
