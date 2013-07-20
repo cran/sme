@@ -1,11 +1,11 @@
-3d8aa502340c2ee8806fa793c7e0705c *ChangeLog
-f08e586a0fda065fa728aa1cebef15c1 *DESCRIPTION
+ced2fcb4cab8e3276a98a507028b3a80 *ChangeLog
+86a44fdd679bcc888227b73e53f4a5cd *DESCRIPTION
 d076d0820051fe3a43392d8cbfb60a32 *NAMESPACE
 a497c63f22199590e9598970115807fe *R/sme.R
 0012d882cdbfa5bdc40582419b526fa5 *data/MTB.rda
 08e3901cd7af58be596259aeb0cf25e9 *data/inflammatory.rda
 df5ff71528c6c615faa28e385eb196ca *inst/doc/Tutorial.Rnw
-8fb64b1018341ff1155cd685de736855 *inst/doc/Tutorial.pdf
+923f73b0e58d13f6b036b9fb1b5df178 *inst/doc/Tutorial.pdf
 d76285d07ce0c72c4e0c3775af4363e1 *man/AICc.Rd
 901ebd03215120b91ed3c143bb1ff38c *man/BICn.Rd
 e43448f7a4f06b82ee2014464ed0b71b *man/MTB.Rd
@@ -23,10 +23,9 @@ afaad143711be97ea570d24863fe5d01 *src/BlockDiagonalMatrix.c
 37348c90bfd2566d82f0c1d6619ffc46 *src/BlockDiagonalMatrix.h
 f9fe2b91d022be7371cdfab61b77d71d *src/IncidenceMatrix.c
 76883b50c91194a7e2cbb36f74a2cee4 *src/IncidenceMatrix.h
-8df04a5b3a370c601c279e07b5d17ba3 *src/LapackSubset.f
 25acef4f0283de65725db6581850d5a8 *src/LinearAlgebra.c
 0b4abff91bb1b2d940aa4b9709547a2e *src/LinearAlgebra.h
-7d153ad296a4a0827e047d2f041a4d5a *src/Makevars
+149275fca683222a6238d61636993bff *src/Makevars
 edbdfc9bb04048e190f37caca1156424 *src/Matrix.c
 3a1c7965534a8824aec9ae760f6a2dd7 *src/Matrix.h
 8ce1e26028ce884973f155e22213175f *src/NelderMead.c
