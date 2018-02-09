@@ -38,7 +38,6 @@ void SMEOptimization(
          double* likelihood,
          double* dfMu,
          double* dfV,
-         int* zeroIntercept,
          int* iterations,
          int* maxIterations,
          double* deltaEM,
@@ -65,16 +64,72 @@ void SME(double* y,
          double* likelihood,
          double* dfMu,
          double* dfV,
-         int* zeroIntercept,
          int* iterations,
          int* maxIterations,
          double* deltaEM,
          int* verbose,
          int* info);
 
+void SMEMultiple(
+  int* M,  //Number of variables being fit
+  double* y,  //All observations across all variables
+  double* timePoints, //All time points across all variables
+  int* individual,  //All individual identifiers across all variables
+  double* X,  //M Ni*p basis matrices, stored one after the other
+  int* Ni,  //M-length vector Observations per variable
+  int* ni,  //M-length vector Individuals per variable
+  int* Nij, //Observations per individual per variable
+  int* p, //M-length vector Number of unique time points per variable
+  double* lambdaMu, //Output - optimal lambda mu per variable
+  double* lambdaV,  //Output - optimal lambda V per variable
+  double* G,  //M p*p matrices, stored one after the other
+  double* mu, //Output - M p length vectors of fitted coefficients
+  double* sigmaSquared, //Output - M error variances
+  double* D,  //Output - M p*p covariance matrices
+  double* v,  //Output - M ni*p vectors of random effects for all subjects
+  double* likelihood, //Output - M likelihoods
+  double* dfMu, //Output - M degrees of freedom for mu
+  double* dfV,  //Output - M degrees of freedom for V
+  int* iterations,  //Output - number of iterations it took for final EM fit per variable
+  int* maxIterations, //1 control parameters indicating maximum iterations for EM per variable
+  double* deltaEM, //1 control parameters indicating convergence criteria for EM
+  double* deltaNM, //1 control parameters indicating convergence criteria for NM
+  int* verbose, //1 integer indicating if the entire procedure should be verbose
+  int* info, //M length integers returning status of fits
+  int* numberOfThreads);  //Number of threads to use
+
+void SMEOptimizationMultiple(
+  int* M,  //Number of variables being fit
+  double* y,  //All observations across all variables
+  double* timePoints, //All time points across all variables
+  int* individual,  //All individual identifiers across all variables
+  double* X,  //M Ni*p basis matrices, stored one after the other
+  int* Ni,  //M-length vector Observations per variable
+  int* ni,  //M-length vector Individuals per variable
+  int* Nij, //Observations per individual per variable
+  int* p, //M-length vector Number of unique time points per variable
+  double* lambdaMu, //Output - optimal lambda mu per variable
+  double* lambdaV,  //Output - optimal lambda V per variable
+  double* G,  //M p*p matrices, stored one after the other
+  double* mu, //Output - M p length vectors of fitted coefficients
+  double* sigmaSquared, //Output - M error variances
+  double* D,  //Output - M p*p covariance matrices
+  double* v,  //Output - M ni*p vectors of random effects for all subjects
+  double* likelihood, //Output - M likelihoods
+  double* dfMu, //Output - M degrees of freedom for mu
+  double* dfV,  //Output - M degrees of freedom for V
+  int* iterations,  //Output - number of iterations it took for final EM fit per variable
+  int* maxIterations, //1 control parameters indicating maximum iterations for EM per variable
+  double* deltaEM, //1 control parameters indicating convergence criteria for EM
+  double* deltaNM, //1 control parameters indicating convergence criteria for NM
+  int* criteria,  //1 control parameter indicating which smoothing parameter selection criteria to use
+  int* verbose, //1 integer indicating if the entire procedure should be verbose
+  int* info, //M length integers returning status of fits
+  int* numberOfThreads);  //Number of threads to use
+
 void calculateYiPrecision(Matrix** Xi, Matrix* Dv, double* sigmaSquared, int n, Matrix** inverseVi);
 
-void EStep(Vector** yi, Matrix** Xi, Matrix** inverseVi, int N, int n, Matrix* Dv, Vector* mu, Vector** vi, Vector** epsiloni, int zeroIntercept);
+void EStep(Vector** yi, Matrix** Xi, Matrix** inverseVi, int N, int n, Matrix* Dv, Vector* mu, Vector** vi, Vector** epsiloni);
 void MStep(Vector** yi,
            Matrix* X,
            Matrix** Xi,
@@ -89,8 +144,7 @@ void MStep(Vector** yi,
            double lambdaV,
            double* sigmaSquared,
            int N,
-           int n,
-           int zeroIntercept);
+           int n);
 
 void calculateLikelihood(Vector** yi, Matrix** Xi, Matrix** inverseVi, Vector* mu, int n, double *likelihood);
 void calculateDegreesOfFreedom(Matrix* X, Matrix** Xi, Matrix** inverseVi, Matrix* G, Matrix* Dv, double lambdaMu, int n, double* dfMu, double* dfV);

@@ -15,25 +15,68 @@
 #
 # block diagonal matrix code thanks to http://tolstoy.newcastle.edu.au/R/help/04/05/1320.html
 
-sme <- function(object,tme,ind,verbose=F,lambda.mu=NULL,lambda.v=NULL,maxIter=500,knots=NULL,zeroIntercept=F,deltaEM=1e-3,deltaNM=1e-3,criteria="AICc",...)
+sme <- function(
+  object,
+  tme,
+  ind,
+  verbose=F,
+  lambda.mu=NULL,
+  lambda.v=NULL,
+  maxIter=500,
+  knots=NULL,
+  zeroIntercept=F,
+  deltaEM=1e-3,
+  deltaNM=1e-3,
+  criteria="AICc",
+  initial.lambda.mu=10000,
+  initial.lambda.v=10000,
+  normalizeTime=FALSE,
+  ...)
 {
   UseMethod("sme")
 }
 
-sme.default <- function(object,tme,ind,verbose=F,lambda.mu=NULL,lambda.v=NULL,maxIter=500,knots=NULL,zeroIntercept=F,deltaEM=1e-3,deltaNM=1e-3,criteria="AICc",...)
+sme.default <- function(
+  object,
+  tme,
+  ind,
+  verbose=F,
+  lambda.mu=NULL,
+  lambda.v=NULL,
+  maxIter=500,
+  knots=NULL,
+  zeroIntercept=F,
+  deltaEM=1e-3,
+  deltaNM=1e-3,
+  criteria="AICc",
+  initial.lambda.mu=10000,
+  initial.lambda.v=10000,
+  normalizeTime=FALSE,...)
 {
   y <- object
   ind <- as.factor(ind)
+  ind <- droplevels(ind)
   ind.unique <- sort(unique(ind))
   y <- y[order(ind)]
   tme <- tme[order(ind)]
   ind <- ind[order(ind)]
 
-  call <- match.call()
+  call <- match.call(call=sys.call(-1))
+
+  intercept <- min(tme)
+  if(normalizeTime)
+  {
+    tme.orig <- tme
+    tme <- (tme - min(tme)) / max(tme)
+  }
 
   if(!is.null(knots))
   {
-    require(splines)
+    if(normalizeTime)
+    {
+      knots.orig <- knots
+      knots <- (knots - min(tme.orig)) / max(tme.orig)
+    }
   
     max.tme <- max(tme)
     min.tme <- min(tme)
@@ -47,6 +90,24 @@ sme.default <- function(object,tme,ind,verbose=F,lambda.mu=NULL,lambda.v=NULL,ma
     G <- roughnessMatrix(incidenceMatrix(tme))
   }
 
+  if(zeroIntercept)
+  {
+    y.orig <- y
+    tme.orig2 <- tme
+    ind.orig <- ind
+    
+    y <- y[tme!=min(tme)]
+    ind <- ind[tme!=min(tme)]
+    tme <- tme[tme!=min(tme)]
+
+    if(normalizeTime)
+    {
+      tme.orig <- tme.orig[tme.orig!=min(tme.orig)]
+    }
+
+    G <- G[-1,-1]
+  }
+  
   yi <- split(y,ind)
   tmei <- split(tme,ind)
   Ni <- sapply(yi,length)
@@ -73,8 +134,8 @@ sme.default <- function(object,tme,ind,verbose=F,lambda.mu=NULL,lambda.v=NULL,ma
                  n=as.integer(length(yi)),
                  Ni=as.integer(sapply(yi,length)),
                  p=as.integer(ncol(X)),
-                 lambdaMu=double(1),
-                 lambdaV=double(1),
+                 lambdaMu=as.double(initial.lambda.mu),
+                 lambdaV=as.double(initial.lambda.v),
                  G=as.double(G),
                  mu=double(ncol(X)),
                  sigmaSquared=double(1),
@@ -83,7 +144,6 @@ sme.default <- function(object,tme,ind,verbose=F,lambda.mu=NULL,lambda.v=NULL,ma
                  likelihood=double(1),
                  dfMu=double(1),
                  dfV=double(1),
-                 zeroIntercept=as.integer(zeroIntercept),
                  iterations=integer(1),
                  maxIterations=as.integer(maxIter),
                  deltaEM=as.double(deltaEM),
@@ -114,7 +174,6 @@ sme.default <- function(object,tme,ind,verbose=F,lambda.mu=NULL,lambda.v=NULL,ma
                  likelihood=double(1),
                  dfMu=double(1),
                  dfV=double(1),
-                 zeroIntercept=as.integer(zeroIntercept),
                  iterations=integer(1),
                  maxIterations=as.integer(maxIter),
                  deltaEM=as.double(deltaEM),
@@ -127,17 +186,38 @@ sme.default <- function(object,tme,ind,verbose=F,lambda.mu=NULL,lambda.v=NULL,ma
   if(is.null(knots))
   {
     return.value$coefficients <- rbind(as.vector(res.em$mu),t(matrix(res.em$v,ncol=res.em$n)))
-    colnames(return.value$coefficients) <- attr(X,"tau")
+    if(normalizeTime)
+    {
+      if(zeroIntercept)
+      {
+        colnames(return.value$coefficients) <- sort(unique(tme.orig[tme.orig!=intercept]))
+      }
+      else
+      {
+        colnames(return.value$coefficients) <- sort(unique(tme.orig))
+      }
+    }
+    else
+    {
+      colnames(return.value$coefficients) <- attr(X,"tau")
+    }
   }
   else
   {
     return.value$coefficients <- rbind(as.vector(B %*% res.em$mu),do.call(rbind,lapply(split(res.em$v,rep(1:res.em$n,each=res.em$p)),function(v) as.vector(B %*% v))))
-    colnames(return.value$coefficients) <- c(min.tme,knots,max.tme)
+    if(normalizeTime)
+    {
+      colnames(return.value$coefficients) <- c(min(tme.orig),knots.orig,max(tme.orig))
+    }
+    else
+    {
+      colnames(return.value$coefficients) <- c(min.tme,knots,max.tme)
+    }
   }
   rownames(return.value$coefficients) <- c("mu",paste("v",ind.unique,sep=""))
   return.value$fitted <- unlist(mapply(Xi,split(res.em$v,rep(1:res.em$n,each=res.em$p)),FUN=function(Xi,vi) Xi %*% (res.em$mu + vi),SIMPLIFY=FALSE))
   return.value$residuals <- y - as.vector(return.value$fitted)
-  return.value$data <- data.frame(y=y,tme=tme,ind=ind)
+  return.value$data <- data.frame(y=y,tme=if(normalizeTime){ tme.orig }else{ tme },ind=ind)
   #return.value$em <- res.em
   return.value$call <- call
   return.value$dfMu <- res.em$dfMu
@@ -149,25 +229,41 @@ sme.default <- function(object,tme,ind,verbose=F,lambda.mu=NULL,lambda.v=NULL,ma
   return.value$parameters <- list(sigmaSquared=res.em$sigmaSquared,D=matrix(res.em$D,nrow=ncol(X)))
   return.value$iterations <- res.em$iterations
   return.value$info <- res.em$info
-  if(!is.null(knots)) return.value$knots <- knots
+  return.value$zeroIntercept <- zeroIntercept
+  return.value$normalizeTime <- return.value$normalizeTime
+  if(zeroIntercept)
+  {
+    return.value$intercept <- intercept
+  }
+  if(!is.null(knots))
+  {
+    if(normalizeTime)
+    {
+      return.value$knots <- knots.orig
+    }
+    else
+    {
+      return.value$knots <- knots
+    }
+  }
 
   class(return.value) <- "sme"
 
   return(return.value)
 }
 
-sme.data.frame <- function(object,tme,ind,verbose=F,lambda.mu=NULL,lambda.v=NULL,maxIter=500,knots=NULL,zeroIntercept=F,deltaEM=1e-3,deltaNM=1e-3,criteria="AICc",...)
+sme.data.frame <- function(object,tme,ind,verbose=F,lambda.mu=NULL,lambda.v=NULL,maxIter=500,knots=NULL,zeroIntercept=F,deltaEM=1e-3,deltaNM=1e-3,criteria="AICc",initial.lambda.mu=10000,initial.lambda.v=10000,normalizeTime=FALSE,...)
 {
   if("variable" %in% names(object))
   {
     ys <- split(object$y,object$variable)
     tmes <- split(object$tme, object$variable)
     inds <- split(object$ind, object$variable)
-    return(sme.list(ys,tmes,inds,verbose=verbose,lambda.mu=lambda.mu,lambda.v=lambda.v,maxIter=maxIter,knots=knots,zeroIntercept=zeroIntercept,deltaEM=deltaEM,deltaNM=deltaNM,criteria=criteria,...))
+    return(sme.list(ys,tmes,inds,verbose=verbose,lambda.mu=lambda.mu,lambda.v=lambda.v,maxIter=maxIter,knots=knots,zeroIntercept=zeroIntercept,deltaEM=deltaEM,deltaNM=deltaNM,criteria=criteria,initial.lambda.mu=initial.lambda.mu,initial.lambda.v=initial.lambda.v,normalizeTime=normalizeTime,...))
   }
   else
   {
-    return(sme(object=object$y,tme=object$tme,ind=object$ind,,verbose=verbose,lambda.mu=lambda.mu,lambda.v=lambda.v,maxIter=maxIter,knots=knots,zeroIntercept=zeroIntercept,deltaEM=deltaEM,deltaNM=deltaNM,criteria=criteria,...))
+    return(sme(object=object$y,tme=object$tme,ind=object$ind,verbose=verbose,lambda.mu=lambda.mu,lambda.v=lambda.v,maxIter=maxIter,knots=knots,zeroIntercept=zeroIntercept,deltaEM=deltaEM,deltaNM=deltaNM,criteria=criteria,initial.lambda.mu=initial.lambda.mu,initial.lambda.v=initial.lambda.v,normalizeTime=normalizeTime,...))
   }
 }
 
@@ -184,6 +280,9 @@ sme.list <- function(
   deltaEM=1e-3,
   deltaNM=1e-3,
   criteria="AICc",
+  initial.lambda.mu=10000,
+  initial.lambda.v=10000,
+  normalizeTime=FALSE,
   numberOfThreads=-1,
   ...)
 {
@@ -194,20 +293,34 @@ sme.list <- function(
   for(i in 1:length(ys))
   {
     inds[[i]] <- as.factor(inds[[i]])
+    inds[[i]] <- droplevels(inds[[i]])
     ys[[i]] <- ys[[i]][order(inds[[i]])]
     tmes[[i]] <- tmes[[i]][order(inds[[i]])]
     inds[[i]] <- inds[[i]][order(inds[[i]])]
   }
 
-  call <- match.call()
+  call <- match.call(call=sys.call(-1))
 
+  intercepts <- lapply(tmes,min)  
+  if(normalizeTime)
+  {
+    tmes.orig <- tmes
+    tmes <- lapply(tmes,function(tme) (tme - min(tme)) / max(tme))
+  }
+  
   if(!is.null(knots))
   {
-    require(splines)
-  
-    max.tmes <- sapply(tmes,max)
-    min.tmes <- sapply(tmes,min)
-    allKnots <- mapply(max.tmes,min.tmes,FUN=function(max.tme,min.tme) c(min.tme,knots,max.tme),SIMPLIFY=FALSE)
+    if(normalizeTime)
+    {
+      allKnots <- lapply(tmes.orig,function(tme) c(0,(knots - min(tme)) / max(tme),1))
+    }
+    else
+    {
+      max.tmes <- sapply(tmes,max)
+      min.tmes <- sapply(tmes,min)
+      allKnots <- mapply(max.tmes,min.tmes,FUN=function(max.tme,min.tme) c(min.tme,knots,max.tme),SIMPLIFY=FALSE)
+    }
+
     Bs <- lapply(allKnots,ns,knots=knots,intercept=T)
 
     Gs <- lapply(allKnots,function(a) roughnessMatrix(incidenceMatrix(a)))
@@ -218,6 +331,24 @@ sme.list <- function(
     Bs <- rep(NA,length(ys))
     allKnots <- rep(NA,length(ys))
     Gs <- lapply(tmes,function(tme) roughnessMatrix(incidenceMatrix(tme)))
+  }
+
+  if(zeroIntercept)
+  {
+    ys.orig <- ys
+    tmes.orig2 <- tmes
+    inds.orig <- inds
+    
+    ys <- mapply(ys,tmes,FUN=function(y,tme) y[tme!=min(tme)],SIMPLIFY=FALSE)
+    inds <- mapply(inds,tmes,FUN=function(ind,tme) ind[tme!=min(tme)],SIMPLIFY=FALSE)
+    tmes <- lapply(tmes,function(tme) tme[tme!=min(tme)])
+    
+    if(normalizeTime)
+    {
+      tmes.orig <- lapply(tmes.orig,function(tme.orig) tme.orig[tme.orig!=min(tme.orig)])
+    }
+    
+    Gs <- lapply(Gs,function(G) G[-1,-1])
   }
 
   M <- length(ys)
@@ -254,8 +385,8 @@ sme.list <- function(
                  ni=as.integer(ni),
                  Nij=as.integer(unlist(Nij)),
                  p=as.integer(ps),
-                 lambdaMu=double(M),
-                 lambdaV=double(M),
+                 lambdaMu=as.double(rep(initial.lambda.mu,M)),
+                 lambdaV=as.double(rep(initial.lambda.v,M)),
                  G=as.double(unlist(Gs)),
                  mu=double(sum(ps)),
                  sigmaSquared=double(M),
@@ -264,7 +395,6 @@ sme.list <- function(
                  likelihood=double(M),
                  dfMu=double(M),
                  dfV=double(M),
-                 zeroIntercept=as.integer(if(length(zeroIntercept)==1){ rep(zeroIntercept,M) }else{ zeroIntercept}),
                  iterations=integer(M),
                  maxIterations=as.integer(maxIter),
                  deltaEM=as.double(deltaEM),
@@ -305,7 +435,6 @@ sme.list <- function(
                  likelihood=double(M),
                  dfMu=double(M),
                  dfV=double(M),
-                 zeroIntercept=as.integer(if(length(zeroIntercept)==1){ rep(zeroIntercept,M) }else{ zeroIntercept}),
                  iterations=integer(M),
                  maxIterations=as.integer(maxIter),
                  deltaEM=as.double(deltaEM),
@@ -339,7 +468,7 @@ sme.list <- function(
     ps,
     allKnots,
     ys,
-    tmes,
+    if(normalizeTime){ tmes.orig }else{ tmes },
     inds,
     iterations,
     dfMus,
@@ -350,17 +479,18 @@ sme.list <- function(
     lambdaMus,
     lambdaVs,
     infos,
-    FUN=function(mu,v,X,Xi,B,n,p,allKnots,y,tme,ind,iterations,dfMu,dfV,likelihood,D,sigma,lambdaMu,lambdaV,info)
+    intercepts,
+    FUN=function(mu,v,X,Xi,B,n,p,allKnots,y,tme,ind,iterations,dfMu,dfV,likelihood,D,sigma,lambdaMu,lambdaV,info,intercept)
     {
       if(is.null(knots))
       {
         coefficients <- rbind(mu,t(matrix(v,ncol=n)))
-        colnames(coefficients) <- attr(X,"tau")
+        colnames(coefficients) <- sort(unique(tme))
       }
       else
       {
         coefficients <- rbind(as.vector(B %*% mu),do.call(rbind,lapply(split(v,rep(1:n,each=p)),function(v) as.vector(B %*% v))))
-        colnames(coefficients) <- allKnots
+        colnames(coefficients) <- c(min(tme),knots,max(tme))
       }
       rownames(coefficients) <- c("mu",paste("v",sort(unique(ind)),sep=""))
       fitted <- unlist(mapply(Xi,split(v,rep(1:n,each=p)),FUN=function(Xi,vi) Xi %*% (mu + vi),SIMPLIFY=FALSE))
@@ -380,8 +510,11 @@ sme.list <- function(
         smoothingParameters=c(mu=lambdaMu,v=lambdaV),
         parameters=list(sigmaSquared=sigma,D=matrix(D,nrow=p)),
         iterations=iterations,
-        info=info)
+        info=info,
+        zeroIntercept=zeroIntercept,
+        normalizeTime=normalizeTime)
       if(!is.null(knots)) return.value$knots <- knots
+      if(zeroIntercept){ return.value$intercept <- intercept }
       class(return.value) <- "sme"
       return(return.value)
     },SIMPLIFY=FALSE)
@@ -392,13 +525,49 @@ sme.list <- function(
 
 getRoughnessMatrix <- function(object)
 {
-  require(splines)
+  if(is.null(object$zeroIntercept))
+  {
+    object$zeroIntercept <- FALSE
+  }
+  if(is.null(object$normalizeTime))
+  {
+    object$normalizeTime <- FALSE
+  }
+
+  if(object$normalizeTime)
+  {
+    if(object$zeroIntercept)
+    {
+      min.tme <- object$intercept
+    }
+    else
+    {
+      min.tme <- min(object$tme)
+    }
+  
+    if(!is.null(object$knots))
+    {
+      knots <- (knots - min.tme) / max(min.tme)
+    }
+    object$data$tme <- (object$data$tme - min.tme) / max(object$data$tme)
+  }
 
   if(is.null(object$knots))
   {
     X <- incidenceMatrix(object$data$tme)
     Xi <- split.data.frame(X,object$data$ind)
-    G <- roughnessMatrix(X)
+
+    if(object$zeroIntercept)
+    {
+      attr(X,"tau") <- c(if(object$normalizeTime){ 0 }else{ object$intercept },attr(X,"tau"))
+      attr(X,"M") <- attr(X,"M")+1
+      G <- roughnessMatrix(X)
+      G <- G[-1,-1]
+    }
+    else
+    {
+      G <- roughnessMatrix(X)
+    }
   }
   else
   {
@@ -417,8 +586,6 @@ getRoughnessMatrix <- function(object)
 
 vcov.sme <- function(object,...)
 {
-  require(splines)
-
   if(is.null(object$knots))
   {
     X <- incidenceMatrix(object$data$tme)
@@ -499,19 +666,42 @@ plot.sme <- function(x,type="model",...)
 
 plotSmeModel <- function(x,xlab="Time",ylab="Y",showIndividuals=T,showConfidenceBands=F,col.meanCurve="red",...)
 {
+  if(is.null(x$zeroIntercept))
+  {
+    x$zeroIntercept <- FALSE
+  }
+  if(x$zeroIntercept)
+  {
+    x.orig <- x
+  
+    x$coefficients <- cbind(Intercept=x$intercept,x$coefficients)
+    colnames(x$coefficients)[1] <- as.character(x$intercept)
+    
+    x$data <- rbind(x$data,data.frame(y=0,tme=x$intercept,ind="Intercept"))
+  }
+
   mu <- spline(x=as.numeric(colnames(x$coefficients)),y=x$coefficients[1,],n=500,method="natural")
   fs <- lapply(2:nrow(x$coefficients),function(i){ spline(x=as.numeric(colnames(x$coefficients)),y=x$coefficients[1,] + x$coefficients[i,],method="natural",n=500) })
   ylim <- range(x$data$y, mu$y, sapply(fs,"[[","y"))
+  xlim <- range(as.numeric(colnames(x$coefficients)))
 
   if(showConfidenceBands)
   {
-    mu.variance <- diag(vcov(x))
+    if(x$zeroIntercept)
+    {
+      mu.variance <- c(0,diag(vcov(x.orig)))
+    }
+    else
+    {
+      mu.variance <- diag(vcov(x))
+    }
+
     upper.band <- spline(x=as.numeric(colnames(x$coefficients)),y=x$coefficients[1,] + 1.96 * sqrt(mu.variance),method="natural",n=500)
     lower.band <- spline(x=as.numeric(colnames(x$coefficients)),y=x$coefficients[1,] - 1.96 * sqrt(mu.variance),method="natural",n=500)
     ylim <- range(ylim, upper.band$y, lower.band$y)
   }
 
-  plot(x=x$data$tme,y=x$data$y,ylim=ylim,xlab=xlab,ylab=ylab,...)
+  plot(x=x$data$tme,y=x$data$y,ylim=ylim,xlim=xlim,xlab=xlab,ylab=ylab,...)
   if(showIndividuals)
   {
     for(i in 1:length(fs)){ lines(fs[[i]],lty="dashed") }
@@ -525,11 +715,21 @@ plotSmeModel <- function(x,xlab="Time",ylab="Y",showIndividuals=T,showConfidence
   }
 }
 
-plotSmeRaw <- function(x,xlab="Time",ylab="Y",mainTitle="",showModelFits=TRUE,showRawLines=FALSE)
+plotSmeRaw <- function(x,xlab="Time",ylab="Y",mainTitle="",showModelFits=TRUE,showRawLines=FALSE,...)
 {
-  require(lattice)
-
   n <- nrow(coef(x))-1
+
+  if(is.null(x$zeroIntercept))
+  {
+    x$zeroIntercept <- FALSE
+  }
+  if(x$zeroIntercept)
+  {
+    x$coefficients <- cbind(Intercept=x$intercept,x$coefficients)
+    colnames(x$coefficients)[1] <- as.character(x$intercept)
+    
+    x$data <- rbind(x$data,data.frame(y=0,tme=x$intercept,ind=unique(x$data$ind)))
+  }
 
   xyplot(y ~ tme | ind,
          data=x$data,
@@ -551,7 +751,8 @@ plotSmeRaw <- function(x,xlab="Time",ylab="Y",mainTitle="",showModelFits=TRUE,sh
               f <- spline(x=as.numeric(colnames(coef(x))),y=coef(x)[1,] + coef(x)[paste("v",ind,sep=""),],method="natural",n=100)
               panel.lines(x=f$x,y=f$y,lty="dashed")
             }
-          })
+          },
+         ...)
 }
 
 plotSmeDiagnostic <- function(x)

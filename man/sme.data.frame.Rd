@@ -5,7 +5,8 @@
 \title{Smoothing-splines mixed-effects model fit(s) from a data.frame object}
 \usage{
 \method{sme}{data.frame}(object,tme,ind,verbose=F,lambda.mu=NULL,lambda.v=NULL,maxIter=500,
-knots=NULL,zeroIntercept=F,deltaEM=1e-3,deltaNM=1e-3,criteria="AICc",\dots)
+knots=NULL,zeroIntercept=F,deltaEM=1e-3,deltaNM=1e-3,criteria="AICc",
+initial.lambda.mu=10000,initial.lambda.v=10000,normalizeTime=FALSE,\dots)
 }
 \alias{sme.data.frame}
 \arguments{
@@ -39,6 +40,11 @@ knots=NULL,zeroIntercept=F,deltaEM=1e-3,deltaNM=1e-3,criteria="AICc",\dots)
   \item{criteria}{one of \code{"AICc"}, \code{"AIC"}, \code{"BICN"} or \code{"BICn"} indicating
   which criteria to use to score a particular combination of \code{lambda.mu} and \code{lambda.v} in
   the Nelder-Mead search}
+  \item{initial.lambda.mu}{value to initialise the smoothing parameter for the fixed-effects to in
+  the Nelder-Mead search. See details below}
+  \item{initial.lambda.v}{value to initialise the smoothing parameter for the random-effects to in
+  the Nelder-Mead search. See details below}
+  \item{normalizeTime}{should time be normalized to lie in $[0,1]$? See details below}
   \item{\dots}{additional arguments used when carrying out multiple fits, specifically
   \code{numberOfThreads} indicating the number of threads used to carry out the multiple fits in
   parallel. See \code{sme.list} for details}
@@ -52,6 +58,14 @@ knots=NULL,zeroIntercept=F,deltaEM=1e-3,deltaNM=1e-3,criteria="AICc",\dots)
   visualisation options
 }
 \details{
+Prior to package version 0.9, starting values for the smoothing parameters in the Nelder-Mead search
+were fixed to $10000$ for both \code{lambda.mu} and \code{lambda.v}. As it turns out, the
+appropriate scale for the smoothing parameters depends on the scale for \code{tme} and so \code{tme}
+will now automatically be rescaled to lie in $[0,1]$ and much smaller initial values for the
+smoothing parameters will be used, although these can now optionally changed to achieve best
+results. To reproduce results obtained using previous versions of the package, set
+\code{initial.lambda.mu=10000}, \code{initial.lambda.v=10000} and \code{normalizeTime=FALSE}.
+
 The default behaviour is to use an incidence matrix representation for the smoothing-splines. This
 works well in most situations but may incur a high computational cost when the number of distinct
 time points is large, as may be the case for irregularly sampled data. Alternatively, a basis
@@ -64,10 +78,10 @@ distinct time points.
 \author{Maurice Berk \email{maurice@mauriceberk.com}}
 \seealso{\code{\link{smeObject}}, \code{\link{sme}}, \code{\link{sme.list}}, \code{\link{plot.sme}}}
 \examples{
-  data(MTB)
-  system.time(fits <- sme(MTB,numberOfThreads=1))
-  sapply(fits,logLik)
+  \dontrun{data(MTB)}
+  \dontrun{system.time(fits <- sme(MTB,numberOfThreads=1))}
+  \dontrun{sapply(fits,logLik)}
 
-  system.time(fits <- sme(MTB,numberOfThreads=10))
-  sapply(fits,logLik)
+  \dontrun{system.time(fits <- sme(MTB,numberOfThreads=10))}
+  \dontrun{sapply(fits,logLik)}
 }

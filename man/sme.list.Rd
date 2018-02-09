@@ -6,7 +6,8 @@
 \usage{
 \method{sme}{list}(object,tme,ind,verbose=F,lambda.mu=NULL,lambda.v=NULL,maxIter=500,
 knots=NULL,zeroIntercept=F,deltaEM=1e-3,deltaNM=1e-3,criteria="AICc",
-numberOfThreads=-1,\dots)
+initial.lambda.mu=10000,initial.lambda.v=10000,normalizeTime=FALSE,numberOfThreads=-1,
+\dots)
 }
 \alias{sme.list}
 \arguments{
@@ -31,6 +32,11 @@ numberOfThreads=-1,\dots)
   \item{criteria}{one of \code{"AICc"}, \code{"AIC"}, \code{"BICN"} or \code{"BICn"} indicating
   which criteria to use to score a particular combination of \code{lambda.mu} and \code{lambda.v} in
   the Nelder-Mead search}
+  \item{initial.lambda.mu}{value to initialise the smoothing parameter for the fixed-effects to in
+  the Nelder-Mead search. See details below}
+  \item{initial.lambda.v}{value to initialise the smoothing parameter for the random-effects to in
+  the Nelder-Mead search. See details below}
+  \item{normalizeTime}{should time be normalized to lie in $[0,1]$? See details below}
   \item{numberOfThreads}{The number of threads to use to fit the multiple smoothing-splines
   mixed-effects models simultaneously. When \code{numberOfThreads=-1}, as is the default, the
   OpenMP system will handle thread creation dynamically}
@@ -44,6 +50,14 @@ numberOfThreads=-1,\dots)
   \code{plot.sme} for visualisation options
 }
 \details{
+Prior to package version 0.9, starting values for the smoothing parameters in the Nelder-Mead search
+were fixed to $10000$ for both \code{lambda.mu} and \code{lambda.v}. As it turns out, the
+appropriate scale for the smoothing parameters depends on the scale for \code{tme} and so \code{tme}
+will now automatically be rescaled to lie in $[0,1]$ and much smaller initial values for the
+smoothing parameters will be used, although these can now optionally changed to achieve best
+results. To reproduce results obtained using previous versions of the package, set
+\code{initial.lambda.mu=10000}, \code{initial.lambda.v=10000} and \code{normalizeTime=FALSE}.
+
 The default behaviour is to use an incidence matrix representation for the smoothing-splines. This
 works well in most situations but may incur a high computational cost when the number of distinct
 time points is large, as may be the case for irregularly sampled data. Alternatively, a basis
